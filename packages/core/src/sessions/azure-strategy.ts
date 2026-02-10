@@ -1,4 +1,4 @@
-import type { SessionManager, SessionContext } from "../types.js";
+import type { SessionManager, SessionContext, FileUpload, IngestedFile } from "../types.js";
 
 /**
  * Azure Dynamic Sessions strategy — delegates code execution to
@@ -67,6 +67,14 @@ export class AzureSessionManager implements SessionManager {
     // Azure Dynamic Sessions are automatically cleaned up after the
     // cooldown period. No explicit destroy needed.
     this.sessionToEnv.delete(_sessionId);
+  }
+
+  getEnvId(sessionId: string): string | undefined {
+    return this.sessionToEnv.get(sessionId);
+  }
+
+  async ingestFiles(_envId: string, _files: FileUpload[]): Promise<IngestedFile[]> {
+    throw new Error("File upload is not yet implemented for the azure session strategy");
   }
 
   /**

@@ -12,6 +12,8 @@ export type {
   SessionStrategy,
   SessionContext,
   SessionManager,
+  FileUpload,
+  IngestedFile,
 } from "./types.js";
 
 // Core query functions

@@ -1,7 +1,7 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
-import type { SessionManager, SessionContext } from "../types.js";
+import { join, resolve, basename, extname } from "node:path";
+import type { SessionManager, SessionContext, FileUpload, IngestedFile } from "../types.js";
 
 /**
  * Local session strategy — creates a folder per session under a configurable base path.
@@ -45,4 +45,32 @@ export class LocalSessionManager implements SessionManager {
     }
     this.sessionToEnv.delete(sessionId);
   }
+
+  getEnvId(sessionId: string): string | undefined {
+    return this.sessionToEnv.get(sessionId);
+  }
+
+  async ingestFiles(envId: string, files: FileUpload[]): Promise<IngestedFile[]> {
+    const sessionDir = join(this.baseDir, envId);
+    if (!existsSync(sessionDir)) {
+      await mkdir(sessionDir, { recursive: true });
+    }
+
+    const results: IngestedFile[] = [];
+    for (const file of files) {
+      const safeName = sanitizeFilename(file.name);
+      const filePath = join(sessionDir, safeName);
+      await writeFile(filePath, file.content);
+      results.push({ name: safeName, path: filePath, size: file.content.byteLength });
+    }
+    return results;
+  }
+}
+
+/** Strip path separators and limit length, preserving extension */
+function sanitizeFilename(name: string): string {
+  const ext = extname(name);
+  let base = basename(name, ext).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
+  if (!base) base = "file";
+  return base + ext;
 }

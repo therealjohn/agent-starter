@@ -99,7 +99,7 @@ scripts/            # Helper scripts for local development
 
 ## API endpoints
 
-The API server exposes three endpoints:
+The API server exposes these endpoints:
 
 ### `GET /health`
 
@@ -137,11 +137,44 @@ curl -X POST http://localhost:3000/query \
 
 Streams agent events as SSE. Each event has an `event` field (`text_delta`, `tool_call`, `todo_update`, `usage`, `session`, `done`, `error`) and a JSON `data` payload.
 
+Accepts either JSON or `multipart/form-data` (for file uploads). When sending multipart, include `prompt` as a text field and attach files under the `files` field.
+
 ```bash
+# JSON (no files)
 curl -X POST http://localhost:3000/stream \
   -H "Content-Type: application/json" \
   -d '{"prompt": "Explain this codebase"}'
+
+# Multipart with file attachments
+curl -X POST http://localhost:3000/stream \
+  -F "prompt=Analyze this CSV data" \
+  -F "files=@data.csv"
 ```
+
+### `POST /sessions/:id/files`
+
+Upload files into an existing session's working directory. Requires a valid session ID (returned from a previous `/stream` or `/query` call). Files are ingested into the session's working directory so the agent can access them with its Read, Bash, and Grep tools.
+
+```bash
+curl -X POST http://localhost:3000/sessions/abc-123/files \
+  -F "files=@report.txt" \
+  -F "files=@data.csv"
+```
+
+**Response:**
+
+```json
+{
+  "files": [
+    { "name": "report.txt", "path": "/abs/path/sessions/env-id/report.txt", "size": 1024 },
+    { "name": "data.csv", "path": "/abs/path/sessions/env-id/data.csv", "size": 2048 }
+  ]
+}
+```
+
+**Constraints:**
+- Allowed file types: `.txt`, `.csv`
+- Maximum file size: 10 MB per file
 
 ### Request body
 
@@ -159,6 +192,32 @@ All endpoints accept `AgentQueryConfig`:
 | `agents` | `Record<string, SubagentConfig>` | Subagent definitions. |
 | `systemPrompt` | `string` | System prompt override. |
 | `maxBudgetUsd` | `number` | Maximum budget in USD. |
+
+## File uploads
+
+The web app supports uploading `.txt` and `.csv` files to give the agent context. Click the paperclip icon in the chat input to attach files, then send your message.
+
+**How it works:**
+
+1. Attached files are sent alongside the prompt as `multipart/form-data` to the `/stream` endpoint.
+2. The API ingests files into the session's working directory via the `SessionManager.ingestFiles()` method.
+3. The agent's prompt is augmented with the list of uploaded filenames.
+4. The agent accesses the files using its built-in tools (Read, Bash, Grep, etc.).
+
+**Per-strategy behavior:**
+
+| Strategy | Ingestion method |
+|----------|-----------------|
+| Local | `fs.writeFile` into the session directory |
+| Docker | Not yet implemented (throws error) |
+| Azure | Not yet implemented (throws error) |
+
+**Constraints:**
+- Allowed types: `.txt`, `.csv`
+- Max file size: 10 MB per file
+- Filenames are sanitized (special characters replaced, length limited)
+
+Files can also be uploaded to an existing session via `POST /sessions/:id/files` (see [API endpoints](#api-endpoints)).
 
 ## Customization guide
 

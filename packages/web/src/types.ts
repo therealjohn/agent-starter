@@ -37,6 +37,8 @@ export interface ChatMessage {
   todos?: TodoProgress;
   usage?: UsageStats;
   isStreaming?: boolean;
+  /** Filenames attached to this message (user messages only) */
+  attachments?: string[];
 }
 
 /** Events received from SSE stream */

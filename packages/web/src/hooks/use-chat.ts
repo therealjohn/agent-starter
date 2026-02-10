@@ -10,7 +10,7 @@ interface UseChatReturn {
   sessionId: string | null;
   usage: UsageStats | null;
   todos: TodoProgress | null;
-  sendMessage: (prompt: string) => Promise<void>;
+  sendMessage: (prompt: string, files?: File[]) => Promise<void>;
   clearMessages: () => void;
 }
 
@@ -34,13 +34,15 @@ export function useChat(): UseChatReturn {
   const abortRef = useRef<AbortController | null>(null);
   const segmentRef = useRef<SegmentState | null>(null);
 
-  const sendMessage = useCallback(async (prompt: string) => {
+  const sendMessage = useCallback(async (prompt: string, files?: File[]) => {
     if (isStreaming) return;
 
+    const attachments = files?.map((f) => f.name);
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
       role: "user",
       content: prompt,
+      ...(attachments && attachments.length > 0 && { attachments }),
     };
 
     const baseId = `assistant-${Date.now()}`;
@@ -61,16 +63,28 @@ export function useChat(): UseChatReturn {
     abortRef.current = new AbortController();
 
     try {
-      const res = await fetch(`${API_BASE}/stream`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "text/event-stream",
-        },
-        body: JSON.stringify({
+      let fetchBody: BodyInit;
+      const headers: Record<string, string> = { Accept: "text/event-stream" };
+
+      if (files && files.length > 0) {
+        const formData = new FormData();
+        formData.append("prompt", prompt);
+        if (sessionId) formData.append("resumeSessionId", sessionId);
+        for (const file of files) formData.append("files", file);
+        fetchBody = formData;
+        // Let browser set Content-Type with boundary
+      } else {
+        headers["Content-Type"] = "application/json";
+        fetchBody = JSON.stringify({
           prompt,
           ...(sessionId && { resumeSessionId: sessionId }),
-        }),
+        });
+      }
+
+      const res = await fetch(`${API_BASE}/stream`, {
+        method: "POST",
+        headers,
+        body: fetchBody,
         signal: abortRef.current.signal,
       });
 
@@ -133,6 +147,7 @@ export function useChat(): UseChatReturn {
 
         if (seg.hasToolCalls) {
           // Text after tool calls → create a new assistant message segment
+          const prevId = seg.currentId;
           seg.counter++;
           const newId = `${baseId}-${seg.counter}`;
           seg.currentId = newId;
@@ -145,7 +160,12 @@ export function useChat(): UseChatReturn {
             isStreaming: true,
             toolCalls: [],
           };
-          setMessages((prev) => [...prev, newMsg]);
+          setMessages((prev) => [
+            ...prev.map((m) =>
+              m.id === prevId ? { ...m, isStreaming: false } : m
+            ),
+            newMsg,
+          ]);
         } else {
           // Append text to current segment
           setMessages((prev) =>

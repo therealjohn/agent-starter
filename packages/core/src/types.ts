@@ -36,6 +36,28 @@ export interface SessionManager {
   mapSession(sdkSessionId: string, envId: string): void;
   /** Destroy an environment and clean up its resources */
   destroy(sessionId: string): Promise<void>;
+  /** Look up the environment ID for a given SDK sessionId */
+  getEnvId(sessionId: string): string | undefined;
+  /** Ingest files into the session's working directory. Returns resolved file metadata. */
+  ingestFiles(envId: string, files: FileUpload[]): Promise<IngestedFile[]>;
+}
+
+/** A file to be ingested into a session's working directory */
+export interface FileUpload {
+  /** Original filename (will be sanitized) */
+  name: string;
+  /** File content as a Buffer */
+  content: Buffer;
+}
+
+/** Result of ingesting a file into a session */
+export interface IngestedFile {
+  /** Sanitized filename */
+  name: string;
+  /** Absolute path to the file in the session's working directory */
+  path: string;
+  /** File size in bytes */
+  size: number;
 }
 
 /** Configuration for an agent query */

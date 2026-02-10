@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { SessionManager, SessionContext } from "../types.js";
+import type { SessionManager, SessionContext, FileUpload, IngestedFile } from "../types.js";
 
 const exec = promisify(execFile);
 
@@ -83,5 +83,13 @@ export class DockerSessionManager implements SessionManager {
   getPort(sessionId: string): number | undefined {
     const envId = this.sessionToEnv.get(sessionId) ?? sessionId;
     return this.containers.get(envId)?.port;
+  }
+
+  getEnvId(sessionId: string): string | undefined {
+    return this.sessionToEnv.get(sessionId);
+  }
+
+  async ingestFiles(_envId: string, _files: FileUpload[]): Promise<IngestedFile[]> {
+    throw new Error("File upload is not yet implemented for the docker session strategy");
   }
 }
