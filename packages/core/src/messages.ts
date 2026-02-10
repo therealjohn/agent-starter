@@ -62,5 +62,5 @@ export function getUsage(
 
 /** Get the session ID from any SDK message */
 export function getSessionId(message: SDKMessage): string | undefined {
-  return message.sessionId as string | undefined;
+  return (message.sessionId ?? message.session_id) as string | undefined;
 }

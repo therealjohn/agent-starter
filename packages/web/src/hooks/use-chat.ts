@@ -1,7 +1,11 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import type { ChatMessage, StreamEvent, UsageStats, TodoProgress, ToolCall } from "@/types";
 
 const API_BASE = "/api";
+
+interface UseChatOptions {
+  onSessionUpdate?: () => void;
+}
 
 interface UseChatReturn {
   messages: ChatMessage[];
@@ -12,6 +16,7 @@ interface UseChatReturn {
   todos: TodoProgress | null;
   sendMessage: (prompt: string, files?: File[]) => Promise<void>;
   clearMessages: () => void;
+  loadSession: (sessionId: string, messages: ChatMessage[]) => void;
 }
 
 /** Tracks which assistant message segment is currently being built */
@@ -24,7 +29,7 @@ interface SegmentState {
   hasToolCalls: boolean;
 }
 
-export function useChat(): UseChatReturn {
+export function useChat(options?: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +38,8 @@ export function useChat(): UseChatReturn {
   const [todos, setTodos] = useState<TodoProgress | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const segmentRef = useRef<SegmentState | null>(null);
+  const onSessionUpdateRef = useRef(options?.onSessionUpdate);
+  useEffect(() => { onSessionUpdateRef.current = options?.onSessionUpdate; });
 
   const sendMessage = useCallback(async (prompt: string, files?: File[]) => {
     if (isStreaming) return;
@@ -136,6 +143,8 @@ export function useChat(): UseChatReturn {
       setIsStreaming(false);
       abortRef.current = null;
       segmentRef.current = null;
+      // Notify that session data has changed (new session created, events recorded)
+      onSessionUpdateRef.current?.();
     }
   }, [isStreaming, sessionId]);
 
@@ -243,6 +252,14 @@ export function useChat(): UseChatReturn {
     setError(null);
   }, []);
 
+  const loadSession = useCallback((sid: string, msgs: ChatMessage[]) => {
+    setMessages(msgs);
+    setSessionId(sid);
+    setUsage(null);
+    setTodos(null);
+    setError(null);
+  }, []);
+
   return {
     messages,
     isStreaming,
@@ -252,5 +269,6 @@ export function useChat(): UseChatReturn {
     todos,
     sendMessage,
     clearMessages,
+    loadSession,
   };
 }

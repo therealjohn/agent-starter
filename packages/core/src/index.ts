@@ -21,7 +21,7 @@ export type {
 export { runQuery, streamQuery } from "./run-query.js";
 
 // Config
-export { getApiKey, resolveConfig } from "./config.js";
+export { getApiKey, resolveConfig, getTitleModel } from "./config.js";
 
 // Session management
 export {
@@ -30,6 +30,13 @@ export {
   DockerSessionManager,
   AzureSessionManager,
 } from "./sessions/index.js";
+
+// Session persistence
+export { SessionStore } from "./sessions/session-store.js";
+export type { SessionMetadata, SessionEvent } from "./sessions/session-store.js";
+
+// Session title generation
+export { generateSessionTitle } from "./sessions/title-generator.js";
 
 // Utilities
 export { createUsageTracker } from "./usage.js";

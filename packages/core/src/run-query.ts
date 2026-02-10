@@ -70,6 +70,10 @@ export async function runQuery(config: AgentQueryConfig): Promise<QueryResult> {
       const result = message as Record<string, unknown>;
       stopReason = result.stop_reason as StopReason ?? null;
 
+      // The result message may carry the session ID
+      const resultSessionId = (result.session_id ?? result.sessionId) as string | undefined;
+      if (resultSessionId) sessionId = resultSessionId;
+
       const resultUsage = result.usage as Record<string, number> | undefined;
       if (resultUsage) {
         tracker.setTotals(resultUsage);
@@ -165,6 +169,13 @@ export async function* streamQuery(
     if (isResult(message)) {
       const result = message as Record<string, unknown>;
       stopReason = result.stop_reason as StopReason ?? null;
+
+      // The result message may carry the session ID
+      const resultSessionId = (result.session_id ?? result.sessionId) as string | undefined;
+      if (resultSessionId && resultSessionId !== sessionId) {
+        sessionId = resultSessionId;
+        yield { type: "session", sessionId };
+      }
 
       // The result message carries authoritative total usage for the entire query
       const resultUsage = result.usage as Record<string, number> | undefined;

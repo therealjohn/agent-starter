@@ -31,6 +31,16 @@ vi.mock("@agent-starter/core", () => ({
     mapSession: vi.fn(),
     destroy: vi.fn().mockResolvedValue(undefined),
   }),
+  SessionStore: vi.fn().mockImplementation(() => ({
+    create: vi.fn().mockResolvedValue({ id: "session-123", title: "", status: "active", createdAt: "", updatedAt: "" }),
+    updateTitle: vi.fn().mockResolvedValue(undefined),
+    updateStatus: vi.fn().mockResolvedValue(undefined),
+    appendEvent: vi.fn().mockResolvedValue(undefined),
+    listSessions: vi.fn().mockResolvedValue([]),
+    getSession: vi.fn().mockResolvedValue({ id: "session-123", title: "", status: "active", createdAt: "", updatedAt: "" }),
+    getEvents: vi.fn().mockResolvedValue([]),
+  })),
+  generateSessionTitle: vi.fn().mockResolvedValue("Test Session Title"),
 }));
 
 describe("API routes", () => {

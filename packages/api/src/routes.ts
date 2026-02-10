@@ -5,9 +5,12 @@ import {
   runQuery,
   streamQuery,
   createSessionManager,
+  SessionStore,
+  generateSessionTitle,
   type AgentQueryConfig,
   type StreamEvent,
   type FileUpload,
+  type SessionEvent,
 } from "@agent-starter/core";
 
 export const app = new Hono();
@@ -18,9 +21,35 @@ app.use("/*", cors());
 // Tracks the mapping between SDK session IDs (conversation state) and
 // execution environments (folders / containers / Azure sessions).
 const sessionManager = createSessionManager();
+const sessionStore = new SessionStore();
 
 app.get("/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+/** List all sessions with metadata */
+app.get("/sessions", async (c) => {
+  try {
+    const sessions = await sessionStore.listSessions();
+    return c.json({ sessions });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return c.json({ error: message }, 500);
+  }
+});
+
+/** Get events for a specific session */
+app.get("/sessions/:id/events", async (c) => {
+  const id = c.req.param("id");
+  try {
+    const meta = await sessionStore.getSession(id);
+    if (!meta) return c.json({ error: "Session not found" }, 404);
+    const events = await sessionStore.getEvents(id);
+    return c.json({ session: meta, events });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return c.json({ error: message }, 500);
+  }
 });
 
 /** Single-turn query — returns complete result as JSON */
@@ -117,13 +146,87 @@ app.post("/stream", async (c) => {
   }
 
   const queryConfig = { ...body, cwd: env.cwd, prompt: body.prompt + fileContext };
+  const isResume = !!body.resumeSessionId;
 
   return streamSSE(c, async (stream) => {
+    let currentSessionId: string | undefined = body.resumeSessionId;
+    let sessionCreated = isResume;
+    let fullText = "";
+    const userPrompt = body.prompt;
+
+    // Record user message event
+    const recordUserMessage = async (sid: string) => {
+      await sessionStore.appendEvent(sid, {
+        type: "user.message",
+        data: { content: userPrompt },
+        timestamp: new Date().toISOString(),
+      });
+    };
+
     try {
       for await (const event of streamQuery(queryConfig)) {
         // When the SDK emits a session ID, map it to this environment
         if (event.type === "session" && env.envId !== "__explicit__") {
           sessionManager.mapSession(event.sessionId, env.envId);
+          currentSessionId = event.sessionId;
+
+          if (!sessionCreated) {
+            await sessionStore.create(event.sessionId);
+            sessionCreated = true;
+          }
+          await recordUserMessage(event.sessionId);
+        }
+
+        // Accumulate text for title generation
+        if (event.type === "text_delta") {
+          fullText += event.text;
+        }
+
+        // Record tool calls
+        if (event.type === "tool_call" && currentSessionId) {
+          sessionStore.appendEvent(currentSessionId, {
+            type: "tool.call",
+            data: { toolCall: event.toolCall },
+            timestamp: new Date().toISOString(),
+          }).catch(() => {});
+        }
+
+        // Record completion and trigger title generation
+        if (event.type === "done") {
+          // The done event may carry the sessionId if it wasn't emitted earlier
+          if (!currentSessionId && event.result.sessionId && env.envId !== "__explicit__") {
+            currentSessionId = event.result.sessionId;
+            sessionManager.mapSession(event.result.sessionId, env.envId);
+            if (!sessionCreated) {
+              await sessionStore.create(event.result.sessionId);
+              sessionCreated = true;
+            }
+            await recordUserMessage(event.result.sessionId);
+          }
+
+          if (currentSessionId) {
+            sessionStore.appendEvent(currentSessionId, {
+              type: "assistant.message",
+              data: { content: fullText },
+              timestamp: new Date().toISOString(),
+            }).catch(() => {});
+
+            sessionStore.appendEvent(currentSessionId, {
+              type: "session.done",
+              data: { stopReason: event.result.stopReason },
+              timestamp: new Date().toISOString(),
+            }).catch(() => {});
+
+            // Fire-and-forget title generation on first exchange (no existing title)
+            const sid = currentSessionId;
+            sessionStore.getSession(sid).then((meta) => {
+              if (meta && !meta.title) {
+                generateSessionTitle(userPrompt, fullText)
+                  .then((title) => sessionStore.updateTitle(sid, title))
+                  .catch(() => {});
+              }
+            }).catch(() => {});
+          }
         }
 
         await stream.writeSSE({

@@ -31,6 +31,11 @@ export function getApiKey(): string {
   return key;
 }
 
+/** Get the model configured for session title generation */
+export function getTitleModel(): AgentQueryConfig["model"] {
+  return (process.env.SESSION_TITLE_MODEL as AgentQueryConfig["model"]) ?? "haiku";
+}
+
 /** Resolve a query config with defaults applied */
 export function resolveConfig(
   config: AgentQueryConfig
