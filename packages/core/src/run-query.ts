@@ -40,6 +40,7 @@ export async function runQuery(config: AgentQueryConfig): Promise<QueryResult> {
       ...(resolved.forkSession && { forkSession: resolved.forkSession }),
       ...(resolved.agents && { agents: resolved.agents }),
       ...(resolved.maxBudgetUsd && { maxBudgetUsd: resolved.maxBudgetUsd }),
+      ...(resolved.settingSources && { settingSources: resolved.settingSources }),
     },
   });
 
@@ -115,6 +116,7 @@ export async function* streamQuery(
       ...(resolved.forkSession && { forkSession: resolved.forkSession }),
       ...(resolved.agents && { agents: resolved.agents }),
       ...(resolved.maxBudgetUsd && { maxBudgetUsd: resolved.maxBudgetUsd }),
+      ...(resolved.settingSources && { settingSources: resolved.settingSources }),
     },
   });
 

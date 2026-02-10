@@ -60,6 +60,9 @@ export interface IngestedFile {
   size: number;
 }
 
+/** Setting source for loading filesystem-based settings and skills */
+export type SettingSource = "user" | "project" | "local";
+
 /** Configuration for an agent query */
 export interface AgentQueryConfig {
   /** The prompt to send to the agent */
@@ -82,17 +85,30 @@ export interface AgentQueryConfig {
   systemPrompt?: string;
   /** Max budget in USD */
   maxBudgetUsd?: number;
+  /**
+   * Control which filesystem settings to load.
+   * Include `'project'` to load skills from `.claude/skills/` in the cwd.
+   * When omitted, no filesystem settings are loaded (SDK isolation mode).
+   */
+  settingSources?: SettingSource[];
 }
 
-/** Subagent configuration */
+/** Subagent configuration — mirrors the SDK's AgentDefinition type */
 export interface SubagentConfig {
-  name: string;
+  /** Natural language description of when to use this agent */
   description: string;
-  /** The prompt/instructions for this subagent */
+  /** The agent's system prompt / instructions (required by the SDK) */
   prompt: string;
-  allowedTools?: string[];
-  systemPrompt?: string;
+  /** Array of allowed tool names. If omitted, inherits all tools from parent */
+  tools?: string[];
+  /** Array of tool names to explicitly disallow for this agent */
+  disallowedTools?: string[];
+  /** Model to use for this agent. If omitted or 'inherit', uses the main model */
+  model?: "sonnet" | "opus" | "haiku" | "inherit";
+  /** Maximum number of agentic turns before stopping */
   maxTurns?: number;
+  /** Skill names to preload into this subagent's context */
+  skills?: string[];
 }
 
 /** Token usage stats for a single message or aggregated */

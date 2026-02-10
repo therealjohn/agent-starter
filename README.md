@@ -95,6 +95,9 @@ infra/              # Azure infrastructure (Bicep)
 
 azure.yaml          # Azure Developer CLI template
 scripts/            # Helper scripts for local development
+
+.claude/skills/     # Agent skills (SKILL.md files)
+└── code-review/    # Example: structured code review skill
 ```
 
 ## API endpoints
@@ -192,6 +195,7 @@ All endpoints accept `AgentQueryConfig`:
 | `agents` | `Record<string, SubagentConfig>` | Subagent definitions. |
 | `systemPrompt` | `string` | System prompt override. |
 | `maxBudgetUsd` | `number` | Maximum budget in USD. |
+| `settingSources` | `("user" \| "project" \| "local")[]` | Setting sources to load. Include `"project"` for `.claude/skills/`. |
 
 ## File uploads
 
@@ -232,16 +236,76 @@ const result = await runQuery({
   prompt: "Review this PR and run the tests",
   agents: {
     "code-reviewer": {
-      name: "code-reviewer",
       description: "Reviews code for quality and style issues",
-      allowedTools: ["Read", "Grep", "Glob"],
-      systemPrompt: "You are a code review expert. Focus on bugs and style.",
+      tools: ["Read", "Grep", "Glob"],
+      prompt: "You are a code review expert. Focus on bugs and style.",
     },
     "test-runner": {
-      name: "test-runner",
       description: "Runs test suites and reports results",
-      allowedTools: ["Bash"],
-      systemPrompt: "Run the project test suite and report results.",
+      tools: ["Bash"],
+      prompt: "Run the project test suite and report results.",
+    },
+  },
+});
+```
+
+### Use skills
+
+[Skills](https://platform.claude.com/docs/en/agent-sdk/skills) are folders of instructions that Claude loads dynamically to improve performance on specialized tasks. Each skill is a directory containing a `SKILL.md` file with YAML frontmatter and markdown instructions.
+
+#### Create a skill
+
+Add a `SKILL.md` file under `.claude/skills/<skill-name>/`:
+
+```markdown
+---
+name: my-skill
+description: A clear description of what this skill does and when to use it.
+---
+
+# My Skill
+
+Instructions, examples, and guidelines that Claude will follow when this skill is active.
+```
+
+This project includes an example skill at `.claude/skills/code-review/` that demonstrates a structured code review checklist.
+
+#### Load skills
+
+Set `settingSources` to `['project']` to make the SDK discover skills from the `.claude/skills/` directory in the working directory:
+
+```typescript
+import { runQuery } from "@agent-starter/core";
+
+const result = await runQuery({
+  prompt: "Review the changes in src/auth.ts",
+  settingSources: ["project"],
+});
+```
+
+You can also load user-level skills from `~/.claude/skills/` by including `'user'`:
+
+```typescript
+const result = await runQuery({
+  prompt: "...",
+  settingSources: ["user", "project"],
+});
+```
+
+#### Skills in subagents
+
+Preload specific skills into a subagent's context using the `skills` field:
+
+```typescript
+const result = await runQuery({
+  prompt: "Review this PR",
+  settingSources: ["project"],
+  agents: {
+    reviewer: {
+      name: "reviewer",
+      description: "Reviews code quality",
+      prompt: "You are a code reviewer.",
+      skills: ["code-review"],
     },
   },
 });

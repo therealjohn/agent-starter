@@ -43,5 +43,6 @@ export function resolveConfig(
     model: config.model ?? (process.env.AGENT_MODEL as AgentQueryConfig["model"]) ?? DEFAULT_MODEL,
     maxTurns: config.maxTurns ?? (Number(process.env.AGENT_MAX_TURNS) || DEFAULT_MAX_TURNS),
     allowedTools: config.allowedTools ?? DEFAULT_ALLOWED_TOOLS,
+    settingSources: config.settingSources,
   };
 }

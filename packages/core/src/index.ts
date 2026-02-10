@@ -2,6 +2,7 @@
 export type {
   AgentQueryConfig,
   SubagentConfig,
+  SettingSource,
   UsageStats,
   TodoItem,
   TodoProgress,
