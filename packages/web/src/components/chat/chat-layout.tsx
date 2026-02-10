@@ -5,7 +5,7 @@ import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
 import { UsageBadge } from "./usage-badge";
 import { SessionSidebar } from "./session-sidebar";
-import { useChat } from "@/hooks/use-chat";
+import { useAgUiChat } from "@/hooks/use-ag-ui-chat";
 import { useSessions } from "@/hooks/use-sessions";
 
 export function ChatLayout() {
@@ -15,7 +15,7 @@ export function ChatLayout() {
     refreshWithTitlePoll();
   }, [refreshWithTitlePoll]);
 
-  const { messages, isStreaming, error, sessionId, usage, sendMessage, clearMessages, loadSession } = useChat({
+  const { messages, isStreaming, error, sessionId, usage, sendMessage, clearMessages, loadSession } = useAgUiChat({
     onSessionUpdate: handleSessionUpdate,
   });
   const [sidebarOpen, setSidebarOpen] = useState(true);

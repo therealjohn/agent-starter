@@ -12,6 +12,7 @@ import {
   type FileUpload,
   type SessionEvent,
 } from "@agent-starter/core";
+import { streamQueryAsAgUi } from "./ag-ui-stream.js";
 
 export const app = new Hono();
 
@@ -284,4 +285,169 @@ app.delete("/sessions/:id", async (c) => {
     const message = error instanceof Error ? error.message : "Unknown error";
     return c.json({ error: message }, 500);
   }
+});
+
+/** Parse AG-UI request body (JSON RunAgentInput or multipart with files) */
+async function parseAgUiRequest(c: { req: { header: (name: string) => string | undefined; json: <T>() => Promise<T>; parseBody: (options?: { all: boolean }) => Promise<Record<string, string | File | (string | File)[]>> } }): Promise<{ threadId?: string; runId?: string; prompt?: string; resumeSessionId?: string; files?: File[]; error?: string }> {
+  const contentType = c.req.header("content-type") ?? "";
+  if (contentType.includes("multipart/form-data")) {
+    const body = await c.req.parseBody({ all: true });
+    const prompt = typeof body["prompt"] === "string" ? body["prompt"] : undefined;
+    if (!prompt) return { error: "prompt is required in multipart" };
+    const threadId = typeof body["threadId"] === "string" ? body["threadId"] : `thread-${Date.now()}`;
+    const runId = typeof body["runId"] === "string" ? body["runId"] : `run-${Date.now()}`;
+    const resumeSessionId = typeof body["resumeSessionId"] === "string" ? body["resumeSessionId"] : undefined;
+    const raw = body["files"] ?? body["files[]"];
+    const entries = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    const fileObjects = entries.filter((f): f is File => f instanceof File);
+    return { threadId, runId, prompt, resumeSessionId, files: fileObjects.length > 0 ? fileObjects : undefined };
+  }
+
+  // JSON body — AG-UI RunAgentInput format
+  const body = await c.req.json<Record<string, unknown>>();
+  const threadId = (body.threadId as string) ?? `thread-${Date.now()}`;
+  const runId = (body.runId as string) ?? `run-${Date.now()}`;
+
+  // Extract prompt from messages array (last user message) or forwardedProps
+  const messages = body.messages as Array<{ role: string; content: string }> | undefined;
+  const lastUserMsg = messages?.filter((m) => m.role === "user").pop();
+  const prompt = lastUserMsg?.content;
+  if (!prompt) return { error: "No user message found in messages array" };
+
+  // resumeSessionId can come from forwardedProps or from threadId if it looks like an SDK session
+  const forwarded = body.forwardedProps as Record<string, unknown> | undefined;
+  const resumeSessionId = (forwarded?.resumeSessionId as string) ?? undefined;
+
+  return { threadId, runId, prompt, resumeSessionId };
+}
+
+/**
+ * AG-UI protocol endpoint.
+ * Accepts RunAgentInput (or multipart), responds with AG-UI SSE event stream.
+ * Compatible with any AG-UI client (HttpAgent, CopilotKit, etc.).
+ */
+app.post("/ag-ui", async (c) => {
+  const { threadId, runId, prompt, resumeSessionId, files, error: parseError } = await parseAgUiRequest(c);
+  if (parseError || !prompt || !threadId || !runId) {
+    return c.json({ error: parseError ?? "Invalid request" }, 400);
+  }
+
+  const env = await sessionManager.prepare(resumeSessionId);
+
+  // Ingest attached files into the session directory
+  let fileContext = "";
+  if (files && files.length > 0) {
+    const { uploads, error: fileError } = await validateFiles(files);
+    if (fileError) return c.json({ error: fileError }, 400);
+    const ingested = await sessionManager.ingestFiles(env.envId, uploads!);
+    const names = ingested.map((f) => f.name).join(", ");
+    fileContext = `\n\nThe following files have been uploaded to your working directory: ${names}`;
+  }
+
+  const queryConfig: AgentQueryConfig = {
+    prompt: prompt + fileContext,
+    cwd: env.cwd,
+    ...(resumeSessionId && { resumeSessionId }),
+  };
+
+  const isResume = !!resumeSessionId;
+
+  return streamSSE(c, async (stream) => {
+    let currentSessionId: string | undefined = resumeSessionId;
+    let sessionCreated = isResume;
+    let fullText = "";
+    const userPrompt = prompt;
+
+    const recordUserMessage = async (sid: string) => {
+      await sessionStore.appendEvent(sid, {
+        type: "user.message",
+        data: { content: userPrompt },
+        timestamp: new Date().toISOString(),
+      });
+    };
+
+    try {
+      for await (const sseEvent of streamQueryAsAgUi(queryConfig, threadId, runId)) {
+        // Parse the event data for session tracking
+        const eventData = JSON.parse(sseEvent.data);
+
+        // Track session from CUSTOM session events
+        if (eventData.type === "CUSTOM" && eventData.name === "session") {
+          const sid = eventData.value?.sessionId;
+          if (sid) {
+            sessionManager.mapSession(sid, env.envId);
+            currentSessionId = sid;
+            if (!sessionCreated) {
+              await sessionStore.create(sid);
+              sessionCreated = true;
+            }
+            await recordUserMessage(sid);
+          }
+        }
+
+        // Accumulate text for title generation
+        if (eventData.type === "TEXT_MESSAGE_CONTENT") {
+          fullText += eventData.delta ?? "";
+        }
+
+        // Track tool calls
+        if (eventData.type === "TOOL_CALL_START" && currentSessionId) {
+          sessionStore.appendEvent(currentSessionId, {
+            type: "tool.call",
+            data: { toolCall: { id: eventData.toolCallId, name: eventData.toolCallName, input: {} } },
+            timestamp: new Date().toISOString(),
+          }).catch(() => {});
+        }
+
+        // Handle completion
+        if (eventData.type === "CUSTOM" && eventData.name === "done_result") {
+          const result = eventData.value;
+          if (!currentSessionId && result?.sessionId) {
+            currentSessionId = result.sessionId;
+            sessionManager.mapSession(result.sessionId, env.envId);
+            if (!sessionCreated) {
+              await sessionStore.create(result.sessionId);
+              sessionCreated = true;
+            }
+            await recordUserMessage(result.sessionId);
+          }
+
+          if (currentSessionId) {
+            sessionStore.appendEvent(currentSessionId, {
+              type: "assistant.message",
+              data: { content: fullText },
+              timestamp: new Date().toISOString(),
+            }).catch(() => {});
+
+            sessionStore.appendEvent(currentSessionId, {
+              type: "session.done",
+              data: { stopReason: result?.stopReason },
+              timestamp: new Date().toISOString(),
+            }).catch(() => {});
+
+            // Fire-and-forget title generation
+            const sid = currentSessionId;
+            sessionStore.getSession(sid).then((meta) => {
+              if (meta && !meta.title) {
+                generateSessionTitle(userPrompt, fullText)
+                  .then((title) => sessionStore.updateTitle(sid, title))
+                  .catch(() => {});
+              }
+            }).catch(() => {});
+          }
+        }
+
+        await stream.writeSSE({
+          event: sseEvent.event,
+          data: sseEvent.data,
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      await stream.writeSSE({
+        event: "RUN_ERROR",
+        data: JSON.stringify({ type: "RUN_ERROR", message, timestamp: Date.now() }),
+      });
+    }
+  });
 });

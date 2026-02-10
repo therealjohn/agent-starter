@@ -10,9 +10,10 @@
     "dev": "tsx --watch src/index.ts"
   },
   "dependencies": {
+    "@ag-ui/core": "^0.0.44",
     "@agent-starter/core": "workspace:*",
-    "hono": "^4.7.0",
-    "@hono/node-server": "^1.14.0"
+    "@hono/node-server": "^1.14.0",
+    "hono": "^4.7.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

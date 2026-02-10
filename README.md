@@ -77,11 +77,13 @@ packages/
 │       └── index.ts          # Barrel export
 ├── api/            # @agent-starter/api — REST + SSE server
 │   └── src/
-│       ├── routes.ts         # POST /query, POST /stream, GET /health
+│       ├── routes.ts         # POST /query, POST /stream, POST /ag-ui, GET /health
+│       ├── ag-ui-stream.ts   # AG-UI event emitter (streamQuery → AG-UI events)
 │       └── index.ts          # Hono server entry
 └── web/            # @agent-starter/web — React chat UI
     └── src/
-        ├── hooks/use-chat.ts           # SSE streaming hook
+        ├── hooks/use-chat.ts           # SSE streaming hook (legacy)
+        ├── hooks/use-ag-ui-chat.ts     # AG-UI protocol client hook
         └── components/chat/            # Chat UI components
 
 session-container/  # Custom container for Azure Dynamic Sessions
@@ -153,6 +155,50 @@ curl -X POST http://localhost:3000/stream \
   -F "prompt=Analyze this CSV data" \
   -F "files=@data.csv"
 ```
+
+### `POST /ag-ui`
+
+[AG-UI protocol](https://docs.ag-ui.com/introduction) endpoint. Accepts the standard `RunAgentInput` body and responds with AG-UI SSE events, making the API compatible with any AG-UI client ([CopilotKit](https://copilotkit.ai), CLI clients, custom UIs, etc.).
+
+```bash
+curl -X POST http://localhost:3000/ag-ui \
+  -H "Content-Type: application/json" \
+  -d '{
+    "threadId": "thread-1",
+    "runId": "run-1",
+    "messages": [{"id": "m1", "role": "user", "content": "Hello"}],
+    "tools": [],
+    "context": [],
+    "state": {},
+    "forwardedProps": {}
+  }'
+```
+
+**AG-UI events emitted:**
+- `RUN_STARTED` / `RUN_FINISHED` / `RUN_ERROR` — lifecycle
+- `TEXT_MESSAGE_START` / `TEXT_MESSAGE_CONTENT` / `TEXT_MESSAGE_END` — streamed text
+- `TOOL_CALL_START` / `TOOL_CALL_ARGS` / `TOOL_CALL_END` — tool calls
+- `CUSTOM { name: "session" }` — SDK session ID
+- `CUSTOM { name: "usage" }` — token usage stats
+- `CUSTOM { name: "todo_update" }` — todo progress
+- `CUSTOM { name: "done_result" }` — final query result
+
+To resume a session, pass `resumeSessionId` in `forwardedProps`:
+
+```bash
+curl -X POST http://localhost:3000/ag-ui \
+  -H "Content-Type: application/json" \
+  -d '{
+    "threadId": "thread-1",
+    "runId": "run-2",
+    "messages": [{"id": "m2", "role": "user", "content": "Follow up question"}],
+    "tools": [],
+    "context": [],
+    "forwardedProps": {"resumeSessionId": "session-abc-123"}
+  }'
+```
+
+Also accepts `multipart/form-data` for file uploads (include `prompt`, `threadId`, `runId` as text fields and `files` as file fields).
 
 ### `POST /sessions/:id/files`
 

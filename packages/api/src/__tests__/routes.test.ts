@@ -110,4 +110,48 @@ describe("API routes", () => {
       expect(res.status).toBe(400);
     });
   });
+
+  describe("POST /ag-ui", () => {
+    it("returns AG-UI SSE stream for valid RunAgentInput", async () => {
+      const res = await app.request("/ag-ui", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          threadId: "thread-1",
+          runId: "run-1",
+          messages: [{ id: "msg-1", role: "user", content: "Hello" }],
+          tools: [],
+          context: [],
+          state: {},
+          forwardedProps: {},
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/event-stream");
+
+      const text = await res.text();
+      expect(text).toContain("event: RUN_STARTED");
+      expect(text).toContain("event: TEXT_MESSAGE_CONTENT");
+      expect(text).toContain("event: RUN_FINISHED");
+    });
+
+    it("returns 400 when no user message is present", async () => {
+      const res = await app.request("/ag-ui", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          threadId: "thread-1",
+          runId: "run-1",
+          messages: [],
+          tools: [],
+          context: [],
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toContain("No user message");
+    });
+  });
 });
