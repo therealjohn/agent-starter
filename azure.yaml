@@ -1,0 +1,126 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/refs/heads/main/schemas/v1.0/azure.yaml.json
+
+name: agent-starter
+metadata:
+  template: agent-starter@0.1.0
+
+infra:
+  provider: bicep
+  path: infra
+  module: main
+
+services:
+  agent-starter-api:
+    project: .
+    language: ts
+    host: containerapp
+    docker:
+      path: ./packages/api/Dockerfile
+      context: .
+      remoteBuild: true
+
+hooks:
+  preprovision:
+    windows:
+      shell: pwsh
+      run: |
+        # Capture signed-in user object ID for RBAC assignments
+        $principalId = azd env get-value AZURE_PRINCIPAL_ID 2>$null
+        if (-not $principalId) {
+          $principalId = az ad signed-in-user show --query id -o tsv 2>$null
+          if ($principalId) {
+            azd env set AZURE_PRINCIPAL_ID $principalId
+          }
+        }
+        # Check if session image was already pushed (second run)
+        $imagePushed = azd env get-value SESSION_IMAGE_PUSHED 2>$null
+        if ($imagePushed -eq "true") {
+          Write-Host "Session container image exists, enabling session pool creation..."
+          azd env set SKIP_SESSION_POOL false
+        } else {
+          Write-Host "First provision run - skipping session pool (image not yet in ACR)"
+          azd env set SKIP_SESSION_POOL true
+        }
+    posix:
+      shell: sh
+      run: |
+        # Capture signed-in user object ID for RBAC assignments
+        PRINCIPAL_ID=$(azd env get-value AZURE_PRINCIPAL_ID 2>/dev/null || echo "")
+        if [ -z "$PRINCIPAL_ID" ]; then
+          PRINCIPAL_ID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$PRINCIPAL_ID" ]; then
+            azd env set AZURE_PRINCIPAL_ID "$PRINCIPAL_ID"
+          fi
+        fi
+        # Check if session image was already pushed (second run)
+        IMAGE_PUSHED=$(azd env get-value SESSION_IMAGE_PUSHED 2>/dev/null || echo "")
+        if [ "$IMAGE_PUSHED" = "true" ]; then
+          echo "Session container image exists, enabling session pool creation..."
+          azd env set SKIP_SESSION_POOL false
+        else
+          echo "First provision run - skipping session pool (image not yet in ACR)"
+          azd env set SKIP_SESSION_POOL true
+        fi
+
+  postprovision:
+    windows:
+      shell: pwsh
+      run: |
+        $imagePushed = azd env get-value SESSION_IMAGE_PUSHED 2>$null
+        if ($imagePushed -eq "true") {
+          Write-Host "Session container already built, skipping..."
+          exit 0
+        }
+        
+        Write-Host "Building and pushing session container to ACR..."
+        $acrEndpoint = azd env get-value AZURE_CONTAINER_REGISTRY_ENDPOINT
+        if (-not $acrEndpoint) {
+          Write-Error "ACR endpoint not found"
+          exit 1
+        }
+        $registryName = $acrEndpoint.Split('.')[0]
+        Write-Host "Registry: $registryName"
+        az acr build --registry $registryName --image session-executor:latest --no-logs ./session-container
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "Failed to build and push session container"
+          exit 1
+        }
+        azd env set SESSION_IMAGE_PUSHED true
+        Write-Host "Session container built and pushed successfully"
+    posix:
+      shell: sh
+      run: |
+        IMAGE_PUSHED=$(azd env get-value SESSION_IMAGE_PUSHED 2>/dev/null || echo "")
+        if [ "$IMAGE_PUSHED" = "true" ]; then
+          echo "Session container already built, skipping..."
+          exit 0
+        fi
+        
+        echo "Building and pushing session container to ACR..."
+        ACR_ENDPOINT=$(azd env get-value AZURE_CONTAINER_REGISTRY_ENDPOINT)
+        if [ -z "$ACR_ENDPOINT" ]; then
+          echo "ACR endpoint not found"
+          exit 1
+        fi
+        REGISTRY_NAME=$(echo $ACR_ENDPOINT | cut -d. -f1)
+        echo "Registry: $REGISTRY_NAME"
+        az acr build --registry $REGISTRY_NAME --image session-executor:latest ./session-container
+        if [ $? -ne 0 ]; then
+          echo "Failed to build and push session container"
+          exit 1
+        fi
+        azd env set SESSION_IMAGE_PUSHED true
+        echo "Session container built and pushed successfully"
+
+  postdeploy:
+    shell: sh
+    continueOnError: true
+    run: |
+      echo ""
+      echo "=========================================="
+      echo "         Deployment Complete!            "
+      echo "=========================================="
+      echo ""
+      echo "API: ${SERVICE_AGENT_STARTER_API_URI}"
+      echo "Health: ${SERVICE_AGENT_STARTER_API_URI}/health"
+      echo ""

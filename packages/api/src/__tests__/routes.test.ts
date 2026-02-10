@@ -26,6 +26,11 @@ vi.mock("@agent-starter/core", () => ({
       },
     };
   }),
+  createSessionManager: vi.fn().mockReturnValue({
+    prepare: vi.fn().mockResolvedValue({ cwd: "/tmp/test-session", envId: "test-env-123" }),
+    mapSession: vi.fn(),
+    destroy: vi.fn().mockResolvedValue(undefined),
+  }),
 }));
 
 describe("API routes", () => {

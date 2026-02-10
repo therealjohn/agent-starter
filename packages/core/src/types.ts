@@ -1,3 +1,43 @@
+/** Session isolation strategy */
+export type SessionStrategy = "local" | "docker" | "azure";
+
+/** Result of preparing an execution environment */
+export interface SessionContext {
+  /** Working directory for the agent's tools (Bash, Write, Edit, etc.) */
+  cwd: string;
+}
+
+/**
+ * Manages execution environments for agent sessions.
+ *
+ * Terminology:
+ * - "SDK session" = conversation state managed by the Claude Agent SDK,
+ *   identified by a sessionId returned from query(). Handles message
+ *   history, context, and resume/fork.
+ * - "Execution environment" = the isolated working directory or container
+ *   where the agent's tools (Bash, Write, Edit) operate. This is what
+ *   the SessionManager controls.
+ *
+ * The mapping works like this:
+ * 1. First query: client has no sessionId yet. Call prepare() with no args
+ *    to create a new environment. It returns a cwd and an internal
+ *    environment ID.
+ * 2. The SDK returns a sessionId in its response.
+ * 3. Call mapSession(sdkSessionId, envId) to associate the SDK session
+ *    with the environment.
+ * 4. Follow-up queries: client sends resumeSessionId (the SDK sessionId).
+ *    Call prepare(resumeSessionId) which looks up and reuses the existing
+ *    environment — same folder, same container.
+ */
+export interface SessionManager {
+  /** Prepare an execution environment. Reuses existing if sessionId is known. */
+  prepare(sessionId?: string): Promise<SessionContext & { envId: string }>;
+  /** Associate an SDK sessionId with an existing environment */
+  mapSession(sdkSessionId: string, envId: string): void;
+  /** Destroy an environment and clean up its resources */
+  destroy(sessionId: string): Promise<void>;
+}
+
 /** Configuration for an agent query */
 export interface AgentQueryConfig {
   /** The prompt to send to the agent */

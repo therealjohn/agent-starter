@@ -65,6 +65,11 @@ packages/
 │       ├── run-query.ts      # runQuery() and streamQuery()
 │       ├── types.ts          # Shared TypeScript types
 │       ├── config.ts         # Environment + defaults
+│       ├── sessions/         # Session isolation strategies
+│       │   ├── index.ts      # Strategy factory
+│       │   ├── local-strategy.ts    # Folder-per-session
+│       │   ├── docker-strategy.ts   # Ephemeral Docker containers
+│       │   └── azure-strategy.ts    # Azure Dynamic Sessions
 │       ├── usage.ts          # Token tracking (deduplicates by message ID)
 │       ├── todos.ts          # TodoWrite event parsing
 │       ├── stop-reasons.ts   # Stop reason classification helpers
@@ -78,6 +83,18 @@ packages/
     └── src/
         ├── hooks/use-chat.ts           # SSE streaming hook
         └── components/chat/            # Chat UI components
+
+session-container/  # Custom container for Azure Dynamic Sessions
+├── Dockerfile
+└── server.js       # HTTP execution server
+
+infra/              # Azure infrastructure (Bicep)
+├── main.bicep
+├── resources.bicep
+└── main.parameters.json
+
+azure.yaml          # Azure Developer CLI template
+scripts/            # Helper scripts for local development
 ```
 
 ## API endpoints
@@ -264,6 +281,57 @@ rl.question("Prompt: ", async (prompt) => {
 });
 ```
 
+## Session isolation
+
+Each agent session needs its own working directory so file operations don't collide. The `SESSION_STRATEGY` environment variable controls how sessions are isolated. It defaults to `local`.
+
+### Local strategy (default)
+
+The local strategy creates a folder per session under a configurable base path. This is the simplest option and works well for local development.
+
+```bash
+# Default — sessions stored in ./sessions/{sessionId}/
+SESSION_STRATEGY=local
+
+# Optional — customize the base directory
+SESSION_BASE_DIR=./my-sessions
+
+# Optional — auto-delete session directories after each query
+SESSION_CLEANUP=true
+```
+
+No additional setup is required. The directory is created automatically when a session starts.
+
+### Docker strategy
+
+The Docker strategy runs each session inside an ephemeral Docker container with an isolated filesystem. The main API stays as the orchestrator and proxies SDK calls into per-session containers.
+
+```bash
+SESSION_STRATEGY=docker
+
+# Optional — specify the Docker image to use
+DOCKER_IMAGE=agent-starter-api
+```
+
+Build the Docker image first:
+
+```bash
+pnpm build
+docker build -f packages/api/Dockerfile -t agent-starter-api .
+```
+
+### Azure strategy
+
+The Azure strategy delegates code execution to [Azure Container Apps Dynamic Sessions](https://learn.microsoft.com/en-us/azure/container-apps/sessions) using custom containers. The API runs in a standard Container App and sends execution requests to Hyper-V-isolated session containers via REST.
+
+```bash
+SESSION_STRATEGY=azure
+AZURE_SESSION_POOL_ENDPOINT=https://<region>.dynamicsessions.io/subscriptions/...
+AZURE_CLIENT_ID=<managed-identity-client-id>
+```
+
+See [Azure deployment](#azure-deployment) for full setup instructions.
+
 ## Hosting
 
 The Claude Agent SDK spawns Claude Code as a subprocess, so each instance needs:
@@ -286,6 +354,117 @@ docker run -e ANTHROPIC_API_KEY=your_key -p 3000:3000 agent-starter-api
 
 For production deployments, spin up an ephemeral container per user session and destroy it when the session ends.
 
+## Azure deployment
+
+This project includes a full [Azure Developer CLI (azd)](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/) template for deploying to Azure Container Apps with Dynamic Sessions for isolated code execution.
+
+```
+                ┌─────────────────────────┐
+                │    User/Client          │
+                └───────────┬─────────────┘
+                            │ HTTPS
+                            ▼
+        ┌───────────────────────────────────────┐
+        │  Azure Container App                  │
+        │  (agent-starter-api)                  │
+        │  ┌─────────────────────────────────┐  │
+        │  │ Hono API + Claude Agent SDK     │  │
+        │  │ SESSION_STRATEGY=azure          │  │
+        │  └─────────────────────────────────┘  │
+        └───────┬──────────────────┬────────────┘
+                │                  │
+    Anthropic   │                  │ Managed Identity
+    API Key     │                  │
+                ▼                  ▼
+┌──────────────────────┐  ┌─────────────────────────────┐
+│  Anthropic API       │  │  Dynamic Session Pool       │
+│  (Claude)            │  │  (Custom Containers)        │
+└──────────────────────┘  │  ┌───────────────────────┐  │
+                          │  │ Session Container     │  │
+                          │  │ Node.js 22            │  │
+                          │  │ Hyper-V isolated      │  │
+                          │  └───────────────────────┘  │
+                          └─────────────────────────────┘
+                                      │ Pulls from
+                                      ▼
+                          ┌──────────────────────────────┐
+                          │  Azure Container Registry    │
+                          └──────────────────────────────┘
+```
+
+### Prerequisites
+
+- [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) installed
+- [Azure Developer CLI (azd)](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd) installed
+- An Azure subscription
+- An Anthropic API key
+
+### Deploy to Azure
+
+The deployment uses a two-step process because the Dynamic Session Pool requires the custom container image to exist in Azure Container Registry before it can be created.
+
+1. Log in to Azure:
+
+```bash
+azd auth login
+```
+
+2. Create a new environment and set your API key:
+
+```bash
+azd env new my-agent
+azd env set ANTHROPIC_API_KEY <your-anthropic-api-key>
+```
+
+3. Run the first provision (creates ACR, builds session container image):
+
+```bash
+azd provision
+```
+
+4. Deploy everything (creates session pool + deploys the API):
+
+```bash
+azd up
+```
+
+After the initial setup, subsequent deployments only need `azd up`.
+
+### Run locally with Azure backend
+
+You can run the API server locally while using Azure Dynamic Sessions for code execution:
+
+```bash
+# Load azd environment variables
+# Windows (PowerShell):
+./scripts/load-env.ps1
+
+# Linux/macOS:
+source ./scripts/load-env.sh
+
+# Start the API server
+pnpm dev:api
+```
+
+### Tear down
+
+Remove all Azure resources:
+
+```bash
+azd down
+```
+
+### Azure resources provisioned
+
+| Resource | Purpose |
+|----------|---------|
+| Container Apps Environment | Hosts the API container app |
+| Container App | Runs agent-starter-api with `SESSION_STRATEGY=azure` |
+| Container Registry | Stores the session executor container image |
+| Dynamic Session Pool | Manages Hyper-V-isolated session containers |
+| User-Assigned Managed Identity | Authenticates between services (ACR pull, session execution) |
+| Log Analytics Workspace | Centralized logging and monitoring |
+
 ## Technology choices
 
 | Choice | Why |
@@ -306,6 +485,13 @@ For production deployments, spin up an ephemeral container per user session and 
 | `AGENT_MODEL` | No | `sonnet` | Default model (`sonnet`, `opus`, `haiku`). |
 | `AGENT_MAX_TURNS` | No | `100` | Maximum conversation turns. |
 | `API_PORT` | No | `3000` | Port for the API server. |
+| `SESSION_STRATEGY` | No | `local` | Session isolation strategy: `local`, `docker`, or `azure`. |
+| `SESSION_BASE_DIR` | No | `./sessions` | Base directory for local session folders. |
+| `SESSION_CLEANUP` | No | `false` | Auto-delete local session directories after query completes. |
+| `DOCKER_IMAGE` | No | `agent-starter-api` | Docker image for the docker strategy. |
+| `AZURE_SESSION_POOL_ENDPOINT` | Azure only | — | Azure Dynamic Sessions pool management endpoint. |
+| `AZURE_CLIENT_ID` | Azure only | — | Managed identity client ID for Azure authentication. |
+| `SESSION_POOL_AUDIENCE` | No | `https://dynamicsessions.io/.default` | Token audience for session pool authentication. |
 
 ## Next steps
 

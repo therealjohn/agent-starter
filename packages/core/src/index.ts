@@ -9,6 +9,9 @@ export type {
   StopReason,
   QueryResult,
   StreamEvent,
+  SessionStrategy,
+  SessionContext,
+  SessionManager,
 } from "./types.js";
 
 // Core query functions
@@ -16,6 +19,14 @@ export { runQuery, streamQuery } from "./run-query.js";
 
 // Config
 export { getApiKey, resolveConfig } from "./config.js";
+
+// Session management
+export {
+  createSessionManager,
+  LocalSessionManager,
+  DockerSessionManager,
+  AzureSessionManager,
+} from "./sessions/index.js";
 
 // Utilities
 export { createUsageTracker } from "./usage.js";
