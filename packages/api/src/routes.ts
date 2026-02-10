@@ -13,10 +13,20 @@ import {
   type SessionEvent,
 } from "@agent-starter/core";
 import { streamQueryAsAgUi } from "./ag-ui-stream.js";
+import { copilotKitHandler } from "./copilotkit.js";
 
 export const app = new Hono();
 
 app.use("/*", cors());
+
+/**
+ * CopilotKit runtime endpoint.
+ * Accepts standard CopilotKit requests and delegates to the AG-UI agent.
+ * Used by CopilotKit frontend components (CopilotChat, CopilotSidebar, etc.).
+ */
+app.all("/copilotkit", async (c) => {
+  return copilotKitHandler(c.req.raw);
+});
 
 // Singleton session manager — lives for the lifetime of the API process.
 // Tracks the mapping between SDK session IDs (conversation state) and

@@ -10,8 +10,10 @@
     "dev": "tsx --watch src/index.ts"
   },
   "dependencies": {
+    "@ag-ui/client": "^0.0.44",
     "@ag-ui/core": "^0.0.44",
     "@agent-starter/core": "workspace:*",
+    "@copilotkit/runtime": "^1.51.3",
     "@hono/node-server": "^1.14.0",
     "hono": "^4.7.0"
   },

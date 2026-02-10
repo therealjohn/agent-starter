@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import type { ChatMessage } from "@/types";
 
 const API_BASE = "/api";
 
@@ -17,35 +16,30 @@ interface SessionEventData {
   timestamp: string;
 }
 
+/** Message shape compatible with CopilotKit's display */
+export interface SessionMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 interface UseSessionsReturn {
   sessions: SessionInfo[];
   isLoading: boolean;
   refreshSessions: () => Promise<void>;
   refreshWithTitlePoll: () => Promise<void>;
-  loadSessionEvents: (id: string) => Promise<{ messages: ChatMessage[]; sessionId: string } | null>;
+  loadSessionMessages: (id: string) => Promise<SessionMessage[] | null>;
 }
 
-/** Convert server events back into ChatMessage[] for display */
-function eventsToMessages(events: SessionEventData[]): ChatMessage[] {
-  const messages: ChatMessage[] = [];
-  let counter = 0;
-
+/** Convert server events into simple message pairs */
+function eventsToMessages(events: SessionEventData[]): SessionMessage[] {
+  const messages: SessionMessage[] = [];
   for (const event of events) {
     if (event.type === "user.message") {
-      messages.push({
-        id: `user-${counter++}`,
-        role: "user",
-        content: (event.data.content as string) ?? "",
-      });
+      messages.push({ role: "user", content: (event.data.content as string) ?? "" });
     } else if (event.type === "assistant.message") {
-      messages.push({
-        id: `assistant-${counter++}`,
-        role: "assistant",
-        content: (event.data.content as string) ?? "",
-      });
+      messages.push({ role: "assistant", content: (event.data.content as string) ?? "" });
     }
   }
-
   return messages;
 }
 
@@ -72,27 +66,24 @@ export function useSessions(): UseSessionsReturn {
   /** Refresh now and schedule a delayed re-fetch for title updates */
   const refreshWithTitlePoll = useCallback(async () => {
     await refreshSessions();
-    // Title generation is async — re-fetch after a short delay to pick it up
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     pollTimerRef.current = setTimeout(() => refreshSessions(), 5000);
   }, [refreshSessions]);
 
-  const loadSessionEvents = useCallback(
-    async (id: string): Promise<{ messages: ChatMessage[]; sessionId: string } | null> => {
+  const loadSessionMessages = useCallback(
+    async (id: string): Promise<SessionMessage[] | null> => {
       try {
         const res = await fetch(`${API_BASE}/sessions/${id}/events`);
         if (!res.ok) return null;
         const data = await res.json();
-        const messages = eventsToMessages(data.events ?? []);
-        return { messages, sessionId: id };
+        return eventsToMessages(data.events ?? []);
       } catch {
         return null;
       }
     },
-    []
+    [],
   );
 
-  // Load sessions on mount
   useEffect(() => {
     refreshSessions();
     return () => {
@@ -100,5 +91,5 @@ export function useSessions(): UseSessionsReturn {
     };
   }, [refreshSessions]);
 
-  return { sessions, isLoading, refreshSessions, refreshWithTitlePoll, loadSessionEvents };
+  return { sessions, isLoading, refreshSessions, refreshWithTitlePoll, loadSessionMessages };
 }
