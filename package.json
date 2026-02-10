@@ -1,0 +1,15 @@
+{
+  "name": "agent-starter",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "test:coverage": "pnpm -r test:coverage",
+    "lint": "pnpm -r lint",
+    "dev:api": "pnpm --filter @agent-starter/api dev",
+    "dev:web": "pnpm --filter @agent-starter/web dev"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
