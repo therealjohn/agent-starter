@@ -40,17 +40,43 @@ export function SessionSidebar({
 
   if (!isOpen) {
     return (
-      <button
-        onClick={onToggle}
-        className="absolute left-2 top-3 z-10 p-1.5 rounded-md text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100"
-        aria-label="Open sessions sidebar"
-      >
-        {/* PanelLeft icon */}
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect width="18" height="18" x="3" y="3" rx="2" />
-          <path d="M9 3v18" />
-        </svg>
-      </button>
+      <aside className="w-12 flex-shrink-0 border-r border-neutral-200 bg-neutral-50 flex flex-col items-center py-3 gap-3 h-full">
+        {/* Expand sidebar */}
+        <button
+          onClick={onToggle}
+          className="p-2 rounded-md text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100"
+          aria-label="Open sessions sidebar"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <path d="M9 3v18" />
+          </svg>
+        </button>
+        {/* New session */}
+        <button
+          onClick={onNewSession}
+          className="p-2 rounded-md text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100"
+          aria-label="New session"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14" /><path d="M12 5v14" />
+          </svg>
+        </button>
+        {/* Refresh */}
+        <button
+          onClick={onRefresh}
+          disabled={isLoading}
+          className="p-2 rounded-md text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 disabled:opacity-50"
+          aria-label="Refresh sessions"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={isLoading ? "animate-spin" : ""}>
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+            <path d="M16 21h5v-5" />
+          </svg>
+        </button>
+      </aside>
     );
   }
 

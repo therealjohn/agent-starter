@@ -69,16 +69,25 @@ importers:
       '@copilotkit/react-ui':
         specifier: ^1.51.3
         version: 1.51.3(@ag-ui/core@0.0.44)(@copilotkitnext/agent@1.51.3(@cfworker/json-schema@4.1.1))(@copilotkitnext/runtime@1.51.3(@ag-ui/client@0.0.44)(@ag-ui/core@0.0.44)(@ag-ui/encoder@0.0.44)(@copilotkitnext/shared@1.51.3))(@langchain/core@0.3.80(@opentelemetry/api@1.9.0))(@langchain/langgraph-sdk@0.1.10(@langchain/core@0.3.80(@opentelemetry/api@1.9.0))(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@opentelemetry/api@1.9.0)(@types/mdast@4.0.4)(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(graphql@16.12.0)(micromark-util-types@2.0.2)(micromark@4.0.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@3.25.76)
+      leaflet:
+        specifier: ^1.9.4
+        version: 1.9.4
       react:
         specifier: ^19.0.0
         version: 19.2.4
       react-dom:
         specifier: ^19.0.0
         version: 19.2.4(react@19.2.4)
+      react-leaflet:
+        specifier: ^5.0.0
+        version: 5.0.0(leaflet@1.9.4)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.1.0
         version: 4.1.18(vite@6.4.1(@types/node@22.19.10)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0))
+      '@types/leaflet':
+        specifier: ^1.9.21
+        version: 1.9.21
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.13
@@ -1356,6 +1365,13 @@ packages:
       react: ^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1
       react-dom: ^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1
 
+  '@react-leaflet/core@3.0.0':
+    resolution: {integrity: sha512-3EWmekh4Nz+pGcr+xjf0KNyYfC3U2JjnkWsh0zcqaexYqmmB5ZhH37kz41JXGmKzpaMZCnPofBBm64i+YrEvGQ==}
+    peerDependencies:
+      leaflet: ^1.9.0
+      react: ^19.0.0
+      react-dom: ^19.0.0
+
   '@react-stately/flags@3.1.2':
     resolution: {integrity: sha512-2HjFcZx1MyQXoPqcBGALwWWmgFVUk2TuKVIQxCbRq7fPyWXIl6VHcakCLurdtYC2Iks7zizvz0Idv48MQ38DWg==}
 
@@ -1773,6 +1789,9 @@ packages:
 
   '@types/katex@0.16.8':
     resolution: {integrity: sha512-trgaNyfU+Xh2Tc+ABIb44a5AYUpicB3uwirOioeOkNPPbmgRNtcWyDeeFRzjPZENO9Vq8gvVqfhaaXWLlevVwg==}
+
+  '@types/leaflet@1.9.21':
+    resolution: {integrity: sha512-TbAd9DaPGSnzp6QvtYngntMZgcRk+igFELwR2N99XZn7RXUdKgsXMR+28bUO0rPsWp8MIu/f47luLIQuSLYv/w==}
 
   '@types/mdast@3.0.15':
     resolution: {integrity: sha512-LnwD+mUEfxWMa1QpDraczIn6k0Ee3SMicuYSSzS6ZYl2gKS09EClnJYGd8Du6rfc5r/GZEk5o1mRb8TaTj03sQ==}
@@ -2866,6 +2885,9 @@ packages:
   layout-base@2.0.1:
     resolution: {integrity: sha512-dp3s92+uNI1hWIpPGH3jK2kxE2lMjdXdr+DH8ynZHpd6PUlH6x6cbuXnoMmiNumznqaNO31xu9e79F0uuZ0JFg==}
 
+  leaflet@1.9.4:
+    resolution: {integrity: sha512-nxS1ynzJOmOlHp+iL3FyWqK89GtNL8U8rvlMOsQdTTssxZwCXh8N2NB3GDQOL+YR3XnWyZAxwQixURb+FA74PA==}
+
   libphonenumber-js@1.12.36:
     resolution: {integrity: sha512-woWhKMAVx1fzzUnMCyOzglgSgf6/AFHLASdOBcchYCyvWSGWt12imw3iu2hdI5d4dGZRsNWAmWiz37sDKUPaRQ==}
 
@@ -3525,6 +3547,13 @@ packages:
 
   react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
+
+  react-leaflet@5.0.0:
+    resolution: {integrity: sha512-CWbTpr5vcHw5bt9i4zSlPEVQdTVcML390TjeDG0cK59z1ylexpqC6M1PJFjV8jD7CF+ACBFsLIDs6DRMoLEofw==}
+    peerDependencies:
+      leaflet: ^1.9.0
+      react: ^19.0.0
+      react-dom: ^19.0.0
 
   react-markdown@10.1.0:
     resolution: {integrity: sha512-qKxVopLT/TyA6BX3Ue5NwabOsAzm0Q7kAPwq6L+wWDwisYs7R8vZ0nRXqq6rkueboxpkjvLGU9fWifiX/ZZFxQ==}
@@ -5627,6 +5656,12 @@ snapshots:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
+  '@react-leaflet/core@3.0.0(leaflet@1.9.4)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      leaflet: 1.9.4
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+
   '@react-stately/flags@3.1.2':
     dependencies:
       '@swc/helpers': 0.5.18
@@ -6027,6 +6062,10 @@ snapshots:
   '@types/json-schema@7.0.15': {}
 
   '@types/katex@0.16.8': {}
+
+  '@types/leaflet@1.9.21':
+    dependencies:
+      '@types/geojson': 7946.0.16
 
   '@types/mdast@3.0.15':
     dependencies:
@@ -7292,6 +7331,8 @@ snapshots:
 
   layout-base@2.0.1: {}
 
+  leaflet@1.9.4: {}
+
   libphonenumber-js@1.12.36: {}
 
   lightningcss-android-arm64@1.30.2:
@@ -8258,6 +8299,13 @@ snapshots:
   react-is@16.13.1: {}
 
   react-is@18.3.1: {}
+
+  react-leaflet@5.0.0(leaflet@1.9.4)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+    dependencies:
+      '@react-leaflet/core': 3.0.0(leaflet@1.9.4)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      leaflet: 1.9.4
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
 
   react-markdown@10.1.0(@types/react@19.2.13)(react@19.2.4):
     dependencies:

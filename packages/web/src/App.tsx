@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { CopilotKit, useCopilotChatInternal } from "@copilotkit/react-core";
-import { CopilotChat } from "@copilotkit/react-ui";
+import { CopilotSidebar, useChatContext } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
 import { SessionSidebar } from "@/components/session-sidebar";
+import { MapCanvas } from "@/components/map-canvas";
 import { useSessions, type SessionMessage } from "@/hooks/use-sessions";
 
 /**
@@ -11,10 +12,7 @@ import { useSessions, type SessionMessage } from "@/hooks/use-sessions";
  * Uses CopilotKit with the self-hosted runtime endpoint (`/api/copilotkit`)
  * which delegates to the AG-UI agent backend.
  *
- * To switch UI modes, replace `CopilotChat` with:
- * - `CopilotSidebar` — docked sidebar panel
- * - `CopilotPopup` — floating popup button/chat
- * All share the same props interface (labels, instructions, etc.).
+ * Layout: SessionSidebar (left) | MapCanvas (center) | CopilotSidebar (right)
  */
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -74,7 +72,7 @@ export default function App() {
         onToggle={() => setSidebarOpen((v) => !v)}
       />
 
-      {/* Main chat area — re-keyed by threadId to reset CopilotKit state */}
+      {/* Main content area — re-keyed by threadId to reset CopilotKit state */}
       <CopilotKit
         key={threadId}
         runtimeUrl="/api/copilotkit"
@@ -82,7 +80,20 @@ export default function App() {
         threadId={threadId}
         showDevConsole={false}
       >
-        <ChatArea onSessionUpdate={refreshWithTitlePoll} previousMessages={previousMessages} />
+        <CopilotSidebar
+          defaultOpen={true}
+          clickOutsideToClose={false}
+          labels={{
+            title: "Agent Starter",
+            initial: previousMessages.length > 0 ? " " : "How can I help you today?",
+            placeholder: "Type a message...",
+          }}
+          onSubmitMessage={() => {
+            setTimeout(refreshWithTitlePoll, 1000);
+          }}
+        >
+          <ChatSidebarWithMap onSessionUpdate={refreshWithTitlePoll} previousMessages={previousMessages} />
+        </CopilotSidebar>
       </CopilotKit>
     </div>
   );
@@ -91,14 +102,14 @@ export default function App() {
 /**
  * Injects previous session messages into CopilotKit's shared agent.
  *
- * CopilotChat calls useCopilotChatInternal internally, which triggers
+ * CopilotSidebar calls useCopilotChatInternal internally, which triggers
  * connectAgent on mount. connectAgent clears messages then reconnects.
  * We need to wait until the connect finishes (agent stops running) before
  * injecting our messages, otherwise connectAgent's setMessages([]) wipes them.
  *
- * Both this hook and CopilotChat's internal hook call useAgent with the same
+ * Both this hook and CopilotSidebar's internal hook call useAgent with the same
  * agentId, returning the same agent singleton, so agent.setMessages() here
- * is seen by CopilotChat's message renderer.
+ * is seen by CopilotSidebar's message renderer.
  */
 function useInjectPreviousMessages(previousMessages: SessionMessage[]) {
   const { agent } = useCopilotChatInternal();
@@ -153,8 +164,8 @@ function useInjectPreviousMessages(previousMessages: SessionMessage[]) {
   }, [agent, previousMessages]);
 }
 
-/** Inner component that renders CopilotChat inside the CopilotKit provider */
-function ChatArea({
+/** Inner component that renders CopilotSidebar with the map as main content */
+function ChatSidebarWithMap({
   onSessionUpdate,
   previousMessages,
 }: {
@@ -162,22 +173,15 @@ function ChatArea({
   previousMessages: SessionMessage[];
 }) {
   useInjectPreviousMessages(previousMessages);
+  const { setOpen } = useChatContext();
+
+  useEffect(() => {
+    setOpen(true);
+  }, [setOpen]);
 
   return (
-    <div className="flex-1 flex flex-col min-w-0">
-      <CopilotChat
-        labels={{
-          title: "Agent Starter",
-          initial: previousMessages.length > 0 ? " " : "How can I help you today?",
-          placeholder: "Type a message...",
-        }}
-        className="flex-1"
-        onSubmitMessage={() => {
-          // After a message exchange completes, refresh session list
-          // to pick up new sessions and title updates
-          setTimeout(onSessionUpdate, 1000);
-        }}
-      />
-    </div>
+    <main className="flex-1 h-screen min-w-0">
+      <MapCanvas />
+    </main>
   );
 }
